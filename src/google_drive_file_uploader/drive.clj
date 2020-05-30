@@ -6,19 +6,20 @@
             [google-drive-file-uploader.utils :as utils]
             [camel-snake-kebab.core :as csk]))
 
-
 (def mapper
   (json/object-mapper
-    {:encode-key-fn utils/snake-case-keyword-keys
-     :decode-key-fn utils/kebab-caseize-keyword}))
+   {:encode-key-fn utils/snake-case-keyword-keys
+    :decode-key-fn utils/kebab-caseize-keyword}))
 
 (defn- folder? [{mime-type :mime-type}]
   (= "application/vnd.google-apps.folder" mime-type))
 
-(defn get-files [access-token]
+(defn get-folders [access-token]
   (let [url (config/get-files-url)
-        {:keys [status body] :as response} (http/get url {:headers          {"Authorization" (str "Bearer " access-token)}
-                                                          :throw-exceptions false})]
+        url-q (str url "?q=mimeType='application/vnd.google-apps.folder'")
+        {:keys [status body] :as response} (http/get url-q {:headers          {"Authorization" (str "Bearer " access-token)}
+                                                            :throw-exceptions false})]
+    #_(println "get-files" response)
     (condp = status
       200 (-> body
               (json/read-value mapper))
@@ -51,7 +52,7 @@
        false))))
 
 (defn authorization-token [refresh-token client-id client-secret]
-  (println "getting auth token..")
+  (println "getting new auth token..")
   (let [url (config/new-access-token-url)
         {:keys [status body]} (http/post url {:body             (-> {:client-id     client-id
                                                                      :client-secret client-secret
@@ -73,6 +74,7 @@
   (let [url (str (config/validate-access-token-url)
                  access-token)
         {status :status} (http/post url {:throw-exceptions false})]
+    (println "status=" status)
     (= 200 status)))
 
 (defn- validate [{:keys [access-token refresh-token client-id client-secret] :as m} & _]
@@ -95,13 +97,14 @@
               access-token        (if (valid-access-token? access-token)
                                     access-token
                                     (authorization-token refresh-token client-id client-secret))
-              folder-id           (->> (get-files access-token)
+              folder-id           (->> (get-folders access-token)
                                        :files
-                                       (filter folder?)
+                                       (filter folder?) ; now useless
                                        (some (fn [{name :name :as e}]
                                                (when (= trimmed-folder-name name)
                                                  e)))
-                                       :id)]
-    (if (nil? folder-id)
-      (format "Folder %s does not exists" folder)
-      (upload-file-multipart folder-id file-path file-name access-token))))
+                                       :id)
+              _ (println "folder-id=" folder-id)]
+             (if (nil? folder-id)
+               (format "Folder %s does not exists" folder)
+               (upload-file-multipart folder-id file-path file-name access-token))))
