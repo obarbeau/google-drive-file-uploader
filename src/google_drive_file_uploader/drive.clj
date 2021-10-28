@@ -9,8 +9,8 @@
 
 (def mapper
   (json/object-mapper
-    {:encode-key-fn utils/snake-case-keyword-keys
-     :decode-key-fn utils/kebab-caseize-keyword}))
+   {:encode-key-fn utils/snake-case-keyword-keys
+    :decode-key-fn utils/kebab-caseize-keyword}))
 
 (defn- folder? [{mime-type :mime-type}]
   (= "application/vnd.google-apps.folder" mime-type))
@@ -60,19 +60,23 @@
                                                                     utils/snake-case-keyword-keys
                                                                     json/write-value-as-string)
                                               :content-type     :json
-                                              :throw-exceptions false})]
-    (condp = status
-      200 (-> body
-              json/read-value
-              utils/kebab-caseize-keys
-              :access-token)
-      (throw (ex-info (str "Error retrieving authorization-token" {:status status
-                                                                   :body   body}) {})))))
+                                              :throw-exceptions false})
+        token (condp = status
+                200 (-> body
+                        json/read-value
+                        utils/kebab-caseize-keys
+                        :access-token)
+                (throw (ex-info (str "Error retrieving authorization-token" {:status status
+                                                                             :body   body}) {})))]
+    (spit (str (System/getProperty "user.home") "/.google-drive-access-token") token)
+    token))
+
 (defn valid-access-token? [access-token]
   (println "Checking validity of access token..")
   (let [url (str (config/validate-access-token-url)
                  access-token)
         {status :status} (http/post url {:throw-exceptions false})]
+    ;;(println status)
     (= 200 status)))
 
 (defn- validate [{:keys [access-token refresh-token client-id client-secret] :as m} & _]
@@ -102,6 +106,6 @@
                                                (when (= trimmed-folder-name name)
                                                  e)))
                                        :id)]
-    (if (nil? folder-id)
-      (format "Folder %s does not exists" folder)
-      (upload-file-multipart folder-id file-path file-name access-token))))
+             (if (nil? folder-id)
+               (format "Folder %s does not exists" folder)
+               (upload-file-multipart folder-id file-path file-name access-token))))
