@@ -18,8 +18,8 @@
 
 (defn upload [args]
   (f/if-let-ok? [result (drive/upload-file-to-folder args)]
-    (success)
-    (fail (f/message result))))
+                (success)
+                (fail (f/message result))))
 
 (def CONFIGURATION
   {:app      {:command     "google-drive-uploader"
@@ -34,7 +34,14 @@
                              {:option "refresh-token" :short "rt" :type :string :env "GD_REFRESH_TOKEN"}
                              {:option "client-id" :short "ci" :type :string :env "GD_CLIENT_ID"}
                              {:option "client-secret" :short "cs" :type :string :env "GD_CLIENT_SECRET"}]
-               :runs        upload}]})
+               :runs        upload}
+              {:command     "check-token" :short "ct"
+               :description ["Check access token and refresh if needed"]
+               :opts        [{:option "access-token" :short "at" :type :string :env "GD_ACCESS_TOKEN"}
+                             {:option "refresh-token" :short "rt" :type :string :env "GD_REFRESH_TOKEN"}
+                             {:option "client-id" :short "ci" :type :string :env "GD_CLIENT_ID"}
+                             {:option "client-secret" :short "cs" :type :string :env "GD_CLIENT_SECRET"}]
+               :runs        drive/check-access-token}]})
 
 (defn -main
   "This is our entry point.

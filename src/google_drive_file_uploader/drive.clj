@@ -28,7 +28,7 @@
   ([folder-hierarchy file-path access-token]
    (upload-file-multipart folder-hierarchy file-path (utils/formatted-date-time) access-token))
   ([folder-hierarchy file-path file-name access-token]
-   (println "Uploading file..")
+   (println "Uploading file.")
    (let [url               (-> (config/file-upload-url)
                                (str "?uploadType=multipart"))
          parents           (clojure.string/split folder-hierarchy #"/")
@@ -51,7 +51,7 @@
        false))))
 
 (defn authorization-token [refresh-token client-id client-secret]
-  (println "getting auth token..")
+  (println "getting new authorization token.")
   (let [url (config/new-access-token-url)
         {:keys [status body]} (http/post url {:body             (-> {:client-id     client-id
                                                                      :client-secret client-secret
@@ -68,16 +68,25 @@
                         :access-token)
                 (throw (ex-info (str "Error retrieving authorization-token" {:status status
                                                                              :body   body}) {})))]
+    (println "write authorization token to file.")
     (spit (str (System/getProperty "user.home") "/.google-drive-access-token") token)
     token))
 
 (defn valid-access-token? [access-token]
-  (println "Checking validity of access token..")
+  (println "Checking validity of access token.")
   (let [url (str (config/validate-access-token-url)
                  access-token)
         {status :status} (http/post url {:throw-exceptions false})]
     ;;(println status)
     (= 200 status)))
+
+(defn check-access-token [{:keys [access-token
+                                  refresh-token
+                                  client-id
+                                  client-secret]}]
+  (if (valid-access-token? access-token)
+    access-token
+    (authorization-token refresh-token client-id client-secret)))
 
 (defn- validate [{:keys [access-token refresh-token client-id client-secret] :as m} & _]
   (cond
@@ -93,12 +102,10 @@
                                      access-token
                                      refresh-token
                                      client-id
-                                     client-secret] :as map}]
+                                     client-secret] :as args}]
   (f/try-all [_                   (validate map)
               trimmed-folder-name (clojure.string/trim folder)
-              access-token        (if (valid-access-token? access-token)
-                                    access-token
-                                    (authorization-token refresh-token client-id client-secret))
+              access-token        (check-access-token (select-keys args [access-token refresh-token client-id client-secret]))
               folder-id           (->> (get-files access-token)
                                        :files
                                        (filter folder?)
