@@ -54,12 +54,13 @@
 (defn authorization-token [refresh-token client-id client-secret]
   (println "getting new authorization token.")
   (let [url (config/new-access-token-url)
-        {:keys [status body]} (http/post url {:body             (-> {:client-id     client-id
-                                                                     :client-secret client-secret
-                                                                     :grant-type    "refresh_token"
-                                                                     :refresh-token refresh-token}
-                                                                    utils/snake-case-keyword-keys
-                                                                    json/write-value-as-string)
+        body (-> {:client-id     client-id
+                  :client-secret client-secret
+                  :grant-type    "refresh_token"
+                  :refresh-token refresh-token}
+                 utils/snake-case-keyword-keys
+                 json/write-value-as-string)
+        {:keys [status body]} (http/post url {:body             body
                                               :content-type     :json
                                               :throw-exceptions false})
         token (condp = status
@@ -78,7 +79,6 @@
   (let [url (str (config/validate-access-token-url)
                  access-token)
         {status :status} (http/post url {:throw-exceptions false})]
-    #_(println "status=" status)
     (= 200 status)))
 
 (defn check-access-token [{:keys [access-token
@@ -106,7 +106,7 @@
                                      client-secret] :as args}]
   (f/try-all [_                   (validate map)
               trimmed-folder-name (clojure.string/trim folder)
-              access-token        (check-access-token (select-keys args [access-token refresh-token client-id client-secret]))
+              access-token        (check-access-token (select-keys args [:access-token :refresh-token :client-id :client-secret]))
               folder-id           (->> (get-folders access-token)
                                        :files
                                        (filter folder?) ; now useless

@@ -23,4 +23,5 @@
                  ;;testing
                  [mock-clj "0.2.1"]]
   :main google-drive-file-uploader.core
+  :profiles {:uberjar {:aot :all}}
   :repl-options {:init-ns google-drive-file-uploader.core})

@@ -21,6 +21,11 @@
                 (success)
                 (fail (f/message result))))
 
+(defn check-access-token [args]
+  (f/if-let-ok? [result (drive/check-access-token args)]
+                (success "check-access-token done")
+                (fail (f/message result))))
+
 (def CONFIGURATION
   {:app      {:command     "google-drive-uploader"
               :description "A command-line to generate your google authenticator OTP"
@@ -41,7 +46,7 @@
                              {:option "refresh-token" :short "rt" :type :string :env "GD_REFRESH_TOKEN"}
                              {:option "client-id" :short "ci" :type :string :env "GD_CLIENT_ID"}
                              {:option "client-secret" :short "cs" :type :string :env "GD_CLIENT_SECRET"}]
-               :runs        drive/check-access-token}]})
+               :runs        check-access-token}]})
 
 (defn -main
   "This is our entry point.
