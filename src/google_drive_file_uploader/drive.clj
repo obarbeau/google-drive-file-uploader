@@ -3,8 +3,7 @@
             [google-drive-file-uploader.config :as config]
             [clj-http.client :as http]
             [jsonista.core :as json]
-            [google-drive-file-uploader.utils :as utils]
-            [camel-snake-kebab.core :as csk]))
+            [google-drive-file-uploader.utils :as utils]))
 
 (def mapper
   (json/object-mapper
@@ -26,10 +25,10 @@
       response)))
 
 (defn upload-file-multipart
-  ([folder-hierarchy file-path access-token]
-   (upload-file-multipart folder-hierarchy file-path (utils/formatted-date-time) access-token))
-  ([folder-hierarchy file-path file-name access-token]
-   (println "Uploading file.")
+  ([folder-hierarchy file-path access-token verbose]
+   (upload-file-multipart folder-hierarchy file-path (utils/formatted-date-time) access-token verbose))
+  ([folder-hierarchy file-path file-name access-token verbose]
+   (when verbose (println "Uploading file."))
    (let [url               (-> (config/file-upload-url)
                                (str "?uploadType=multipart"))
          parents           (clojure.string/split folder-hierarchy #"/")
@@ -46,13 +45,13 @@
          {:keys [status body] :as response} (http/post url {:headers          {"Authorization" (str "Bearer " access-token)}
                                                             :multipart        multipart-content
                                                             :throw-exceptions false})]
-     (println response)
+     (when verbose (println response))
      (condp = status
        200 true
        false))))
 
-(defn authorization-token [refresh-token client-id client-secret]
-  (println "getting new authorization token.")
+(defn authorization-token [refresh-token client-id client-secret verbose]
+  (when verbose (println "Getting new authorization token."))
   (let [url (config/new-access-token-url)
         body (-> {:client-id     client-id
                   :client-secret client-secret
@@ -70,24 +69,27 @@
                         :access-token)
                 (throw (ex-info (str "Error retrieving authorization-token" {:status status
                                                                              :body   body}) {})))]
-    (println "write authorization token to file.")
+    (when verbose (println "Write authorization token to file."))
     (spit (str (System/getProperty "user.home") "/.google-drive-access-token") token)
     token))
 
-(defn valid-access-token? [access-token]
-  (println "Checking validity of access token.")
+(defn valid-access-token? [access-token verbose]
+  (when verbose (println "Checking validity of access token."))
   (let [url (str (config/validate-access-token-url)
                  access-token)
         {status :status} (http/post url {:throw-exceptions false})]
-    (= 200 status)))
+    (when (= 200 status)
+      (when verbose (println "Access token is valid."))
+      true)))
 
 (defn check-access-token [{:keys [access-token
                                   refresh-token
                                   client-id
-                                  client-secret]}]
-  (if (valid-access-token? access-token)
+                                  client-secret
+                                  verbose]}]
+  (if (valid-access-token? access-token verbose)
     access-token
-    (authorization-token refresh-token client-id client-secret)))
+    (authorization-token refresh-token client-id client-secret verbose)))
 
 (defn- validate [{:keys [access-token refresh-token client-id client-secret] :as m} & _]
   (cond
@@ -101,12 +103,14 @@
                                      file-path
                                      file-name
                                      access-token
-                                     refresh-token
-                                     client-id
-                                     client-secret] :as args}]
-  (f/try-all [_                   (validate map)
+                                     verbose] :as args}]
+  (f/try-all [_                   (validate args)
               trimmed-folder-name (clojure.string/trim folder)
-              access-token        (check-access-token (select-keys args [:access-token :refresh-token :client-id :client-secret]))
+              access-token        (check-access-token (select-keys args [:access-token
+                                                                         :refresh-token
+                                                                         :client-id
+                                                                         :client-secret
+                                                                         :verbose]))
               folder-id           (->> (get-folders access-token)
                                        :files
                                        (filter folder?) ; now useless
@@ -115,5 +119,5 @@
                                                  e)))
                                        :id)]
              (if (nil? folder-id)
-               (format "Folder %s does not exists" folder)
-               (upload-file-multipart folder-id file-path file-name access-token))))
+               (f/fail (format "Folder %s does not exists" folder))
+               (upload-file-multipart folder-id file-path file-name access-token verbose))))

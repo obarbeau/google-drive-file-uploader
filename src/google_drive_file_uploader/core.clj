@@ -23,13 +23,17 @@
 
 (defn check-access-token [args]
   (f/if-let-ok? [result (drive/check-access-token args)]
-                (success "check-access-token done")
+                (success)
                 (fail (f/message result))))
 
 (def CONFIGURATION
   {:app      {:command     "google-drive-uploader"
               :description "A command-line to generate your google authenticator OTP"
               :version     "0.1"}
+   :global-opts     [{:as      "Verbosity level"
+                      :option  "verbose"
+                      :short   "v"
+                      :type    :flag}]
    :commands [{:command     "upload-file" :short "uf"
                :description ["Upload a file"]
                :opts        [{:option "folder" :short "f" :type :string :default ""}
