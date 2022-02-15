@@ -37,9 +37,11 @@
    :commands [{:command     "upload-file" :short "uf"
                :description ["Upload a file"]
                :opts        [{:option "folder" :short "f" :type :string :default ""}
+                             {:option "folder-id" :short "fi" :type :string :default ""}
                              {:option "file-path" :short "fp" :type :string :default :present}
                              {:option "file-name" :short "fn" :type :string :default (utils/formatted-date-time)}
                              {:option "access-token" :short "at" :type :string :env "GD_ACCESS_TOKEN"}
+                             {:option "key-file" :short "k" :type :string :env "GD_KEY_FILE"}
                              {:option "refresh-token" :short "rt" :type :string :env "GD_REFRESH_TOKEN"}
                              {:option "client-id" :short "ci" :type :string :env "GD_CLIENT_ID"}
                              {:option "client-secret" :short "cs" :type :string :env "GD_CLIENT_SECRET"}]
@@ -47,6 +49,7 @@
               {:command     "check-token" :short "ct"
                :description ["Check access token and refresh if needed"]
                :opts        [{:option "access-token" :short "at" :type :string :env "GD_ACCESS_TOKEN"}
+                             {:option "key-file" :short "k" :type :string :env "GD_KEY_FILE"}
                              {:option "refresh-token" :short "rt" :type :string :env "GD_REFRESH_TOKEN"}
                              {:option "client-id" :short "ci" :type :string :env "GD_CLIENT_ID"}
                              {:option "client-secret" :short "cs" :type :string :env "GD_CLIENT_SECRET"}]
@@ -58,4 +61,3 @@
   Commands (functions) will be invoked as appropriate."
   [& args]
   (run-cmd args CONFIGURATION))
-

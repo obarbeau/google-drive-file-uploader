@@ -3,14 +3,28 @@
             [google-drive-file-uploader.config :as config]
             [clj-http.client :as http]
             [jsonista.core :as json]
-            [google-drive-file-uploader.utils :as utils]))
+            [google-drive-file-uploader.utils :as utils])
+  (:import (com.google.api.client.googleapis.auth.oauth2 GoogleCredential)
+           (java.io FileInputStream)))
+
+(defn get-access-token-from-key-file
+  "Exchange a service-account JSON key file for a short-lived Drive access token.
+  Performs the JWT-Bearer flow (RFC 7523) via the Google API Client SDK."
+  [^String filename]
+  (.getAccessToken
+   (doto
+    (.createScoped
+     (GoogleCredential/fromStream
+      (FileInputStream. filename))
+     ["https://www.googleapis.com/auth/drive"])
+     (.refreshToken))))
 
 (def mapper
   (json/object-mapper
    {:encode-key-fn utils/snake-case-keyword-keys
     :decode-key-fn utils/kebab-caseize-keyword}))
 
-(defn- folder? [{mime-type :mime-type}]
+(defn folder? [{mime-type :mime-type}]
   (= "application/vnd.google-apps.folder" mime-type))
 
 (defn get-folders [access-token]
@@ -18,7 +32,6 @@
         url-q (str url "?q=mimeType='application/vnd.google-apps.folder'")
         {:keys [status body] :as response} (http/get url-q {:headers          {"Authorization" (str "Bearer " access-token)}
                                                             :throw-exceptions false})]
-    #_(println "get-files" response)
     (condp = status
       200 (-> body
               (json/read-value mapper))
@@ -83,42 +96,97 @@
       (when verbose (println "Access token is valid."))
       true)))
 
-(defn check-access-token [{:keys [access-token
-                                  refresh-token
-                                  client-id
-                                  client-secret
-                                  verbose]}]
-  (if (valid-access-token? access-token verbose)
+(defn check-access-token
+  "Resolve the access token to use, in priority order:
+  1. an already-valid access-token,
+  2. a fresh token obtained from refresh-token + client credentials,
+  3. a fresh token obtained from a service-account key file.
+  Returns the access token string, or nil if nothing usable was provided
+  (validate should have caught that case earlier)."
+  [{:keys [access-token
+           refresh-token
+           client-id
+           client-secret
+           key-file
+           verbose]}]
+  (cond
+    (valid-access-token? access-token verbose)
     access-token
-    (authorization-token refresh-token client-id client-secret verbose)))
 
-(defn- validate [{:keys [access-token refresh-token client-id client-secret] :as m} & _]
+    (and refresh-token client-id client-secret)
+    (authorization-token refresh-token client-id client-secret verbose)
+
+    key-file
+    (do
+      (when verbose (println "Getting access token from service-account key file."))
+      (get-access-token-from-key-file key-file))))
+
+(defn validate [{:keys [access-token refresh-token client-id client-secret key-file]} & _]
   (cond
     (and (empty? access-token)
+         (empty? key-file)
          (or (empty? refresh-token)
              (empty? client-id)
-             (empty? client-secret))) (f/fail "Either Access Token or Refresh Token, Client Id and Client Secret must be given")
+             (empty? client-secret)))
+    (f/fail (str "Either Access Token, or Key File, "
+                 "or Refresh Token + Client Id + Client Secret must be given"))
     :else nil))
 
-(defn upload-file-to-folder [{:keys [folder
-                                     file-path
-                                     file-name
-                                     access-token
-                                     verbose] :as args}]
-  (f/try-all [_                   (validate args)
-              trimmed-folder-name (clojure.string/trim folder)
-              access-token        (check-access-token (select-keys args [:access-token
-                                                                         :refresh-token
-                                                                         :client-id
-                                                                         :client-secret
-                                                                         :verbose]))
-              folder-id           (->> (get-folders access-token)
-                                       :files
-                                       (filter folder?) ; now useless
-                                       (some (fn [{name :name :as e}]
-                                               (when (= trimmed-folder-name name)
-                                                 e)))
-                                       :id)]
-             (if (nil? folder-id)
-               (f/fail (format "Folder %s does not exists" folder))
-               (upload-file-multipart folder-id file-path file-name access-token verbose))))
+(defn lookup-folder-id-by-name
+  "Search the Drive folders accessible to the access token,
+  return the id of the first one whose name matches `folder-name` (after trim)."
+  [access-token folder-name]
+  (let [trimmed (clojure.string/trim folder-name)]
+    (->> (get-folders access-token)
+         :files
+         (some (fn [{name :name :as e}]
+                 (when (= trimmed name) e)))
+         :id)))
+
+(defn upload-file-to-folder
+  "Upload a file to a Google Drive folder.
+
+  Authentication (in this order of priority):
+  - `access-token` if still valid,
+  - `refresh-token` + `client-id` + `client-secret` (OAuth2 user flow),
+  - `key-file` pointing to a service-account JSON key.
+
+  Folder targeting:
+  - `folder-id` if provided is used directly (recommended for service accounts),
+  - otherwise `folder` is treated as a folder name to look up in the user's Drive."
+  [{:keys [folder
+           folder-id
+           file-path
+           file-name
+           verbose] :as args}]
+  (f/try-all [_                (validate args)
+              access-token     (check-access-token
+                                (select-keys args [:access-token
+                                                   :refresh-token
+                                                   :client-id
+                                                   :client-secret
+                                                   :key-file
+                                                   :verbose]))
+              upload-folder-id (or folder-id
+                                   (when-not (clojure.string/blank? folder)
+                                     (lookup-folder-id-by-name access-token folder)))]
+             (if (nil? upload-folder-id)
+               (f/fail (format "Folder %s does not exist" (or folder-id folder)))
+               (upload-file-multipart upload-folder-id file-path file-name access-token verbose))))
+
+(comment
+  ;; Service-account flow (recommended for automation):
+  (upload-file-to-folder
+   {:file-path "project.clj"
+    :file-name "project.clj"
+    :key-file "/path/to/service-account.json"
+    :folder-id "1A2B3C..."})
+
+  ;; OAuth2 user flow with a still-valid access token:
+  (upload-file-to-folder
+   {:file-path "project.clj"
+    :file-name "project.clj"
+    :access-token "ya29...."
+    :folder "MyFolder"})
+  ;
+  )
