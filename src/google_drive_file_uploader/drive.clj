@@ -70,7 +70,7 @@
                 (throw (ex-info (str "Error retrieving authorization-token" {:status status
                                                                              :body   body}) {})))]
     (when verbose (println "Write authorization token to file."))
-    (println "Please update $XDG_DATA_HOME/google-drive-uploader/tokens with this AT\n" token)
+    (println "Please update $XDG_CONFIG_HOME/chezmoi/chezmoi.toml > google_drive_uploader.access.token with this AT\n" token)
     #_(spit (str (System/getProperty "user.home") "/.google-drive-access-token") token)
     token))
 
