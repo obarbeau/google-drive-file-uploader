@@ -1,9 +1,10 @@
 (ns google-drive-file-uploader.config
-  (:require [clojure.java.io :as io]))
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]))
 
 (def config (-> (io/resource "config.edn")
                 slurp
-                clojure.edn/read-string))
+                edn/read-string))
 
 (defn file-upload-url []
   (:file-upload-url config))

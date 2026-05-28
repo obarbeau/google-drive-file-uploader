@@ -24,9 +24,9 @@
       (is (= 1 (m/call-count #'drive/valid-access-token?)))
       (is (= 1 (m/call-count #'drive/get-folders)))
       (is (= 1 (m/call-count #'drive/upload-file-multipart)))
-      (is (= ["foo-access-token" nil]
+      (is (= ["foo-access-token"]
              (m/last-call #'drive/valid-access-token?)))
-      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "foo-access-token" nil]
+      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "foo-access-token"]
              (m/last-call #'drive/upload-file-multipart)))))
 
   (testing "OAuth2 flow: should fetch a new access token if the supplied access-token is not valid"
@@ -45,11 +45,11 @@
       (is (= 1 (m/call-count #'drive/get-folders)))
       (is (= 1 (m/call-count #'drive/upload-file-multipart)))
       (is (= 1 (m/call-count #'drive/authorization-token)))
-      (is (= ["foo-access-token" nil]
+      (is (= ["foo-access-token"]
              (m/last-call #'drive/valid-access-token?)))
-      (is (= ["foo-refresh-token" "foo-client-id" "foo-client-secret" nil]
+      (is (= ["foo-refresh-token" "foo-client-id" "foo-client-secret"]
              (m/last-call #'drive/authorization-token)))
-      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "new-access-token" nil]
+      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "new-access-token"]
              (m/last-call #'drive/upload-file-multipart))))))
 
 (deftest upload-file-to-folder-service-account-test
@@ -66,7 +66,7 @@
       (is (= 1 (m/call-count #'drive/upload-file-multipart)))
       (is (= ["/path/to/sa.json"]
              (m/last-call #'drive/get-access-token-from-key-file)))
-      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "sa-access-token" nil]
+      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "sa-access-token"]
              (m/last-call #'drive/upload-file-multipart)))))
 
   (testing "OAuth2 priority: a valid access-token must be preferred over a key-file"
@@ -81,7 +81,7 @@
                                                         :key-file     "/path/to/sa.json"}))))
       (is (= 0 (m/call-count #'drive/get-access-token-from-key-file))
           "key-file must not be consulted when access-token is valid")
-      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "foo-access-token" nil]
+      (is (= ["foo-id-1" "/users/foo/a.apk" "foo-name.apk" "foo-access-token"]
              (m/last-call #'drive/upload-file-multipart))))))
 
 (deftest upload-file-to-folder-folder-id-test
@@ -96,7 +96,7 @@
                                                         :key-file  "/path/to/sa.json"}))))
       (is (= 0 (m/call-count #'drive/get-folders))
           "get-folders must not be called when folder-id is provided")
-      (is (= ["explicit-folder-id" "/users/foo/a.apk" "foo-name.apk" "sa-access-token" nil]
+      (is (= ["explicit-folder-id" "/users/foo/a.apk" "foo-name.apk" "sa-access-token"]
              (m/last-call #'drive/upload-file-multipart)))))
 
   (testing "Folder-id flow: a folder-id wins over a folder-name lookup"
@@ -109,7 +109,7 @@
                                                         :file-name    "foo-name.apk"
                                                         :access-token "foo-access-token"}))))
       (is (= 0 (m/call-count #'drive/get-folders)))
-      (is (= ["explicit-folder-id" "/users/foo/a.apk" "foo-name.apk" "foo-access-token" nil]
+      (is (= ["explicit-folder-id" "/users/foo/a.apk" "foo-name.apk" "foo-access-token"]
              (m/last-call #'drive/upload-file-multipart))))))
 
 (deftest upload-file-to-folder-validation-test

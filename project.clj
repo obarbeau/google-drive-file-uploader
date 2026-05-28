@@ -17,10 +17,13 @@
                  [clojure.java-time "0.3.2"]
 
                  ;;command-line
-                 [cli-matic "0.3.11"]
+                 [cli-matic "0.5.4"]
 
                  ;;error handling
                  [failjure "2.0.0"]
+
+                 ;;logging
+                 [com.taoensso/timbre "6.8.0"]
 
                  ;;testing
                  [mock-clj "0.2.1"]]
