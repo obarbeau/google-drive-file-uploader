@@ -1,5 +1,6 @@
 (ns google-drive-file-uploader.core
-  (:require [google-drive-file-uploader.drive :as drive]
+  (:require [google-drive-file-uploader.auth :as auth]
+            [google-drive-file-uploader.drive :as drive]
             [google-drive-file-uploader.logging :as logging]
             [taoensso.timbre :as timbre]
             [cli-matic.core :refer [run-cmd]]
@@ -44,26 +45,31 @@
   ;; correctly silences the early raw-arg detection from -main.
   (logging/set-verbose! (:verbose args))
   (timbre/debug "upload called with args:" (redact-args args))
-  (try
-    (f/if-let-ok? [result (drive/upload-file-to-folder args)]
-                  (success)
-                  (fail (f/message result)))
-    (catch Throwable t
-      (timbre/debug "Uncaught exception in upload:" (.getMessage t))
-      (.printStackTrace t)
-      (fail (str "Uncaught exception: " (.getMessage t))))))
+  (let [args (auth/resolve-credentials args)]
+    (timbre/debug "upload after resolve-credentials:" (redact-args args))
+    (try
+      (f/if-let-ok? [result (drive/upload-file-to-folder args)]
+                    (success)
+                    (fail (f/message result)))
+      (catch Throwable t
+        (timbre/debug "Uncaught exception in upload:" (.getMessage t))
+        (.printStackTrace t)
+        (fail (str "Uncaught exception: " (.getMessage t)))))))
 
 (defn check-access-token [args]
   (logging/set-verbose! (:verbose args))
   (timbre/debug "check-access-token called with args:" (redact-args args))
-  (try
-    (f/if-let-ok? [result (drive/check-access-token args)]
-                  (success (str "Access token resolved: " (mask-secret result)))
-                  (fail (f/message result)))
-    (catch Throwable t
-      (timbre/debug "Uncaught exception in check-access-token:" (.getMessage t))
-      (.printStackTrace t)
-      (fail (str "Uncaught exception: " (.getMessage t))))))
+  (let [args (auth/resolve-credentials args)]
+    (timbre/debug "check-access-token after resolve-credentials:"
+                  (redact-args args))
+    (try
+      (f/if-let-ok? [result (drive/check-access-token args)]
+                    (success (str "Access token resolved: " (mask-secret result)))
+                    (fail (f/message result)))
+      (catch Throwable t
+        (timbre/debug "Uncaught exception in check-access-token:" (.getMessage t))
+        (.printStackTrace t)
+        (fail (str "Uncaught exception: " (.getMessage t)))))))
 
 (def ^:private verbose-opt
   "The --verbose / -v global flag. Declared in :global-opts so it must be
@@ -78,17 +84,48 @@
    :short  "v"
    :type   :with-flag})
 
+(def ^:private auth-sources-help
+  "Help block describing the three credential sources, appended to the
+  description of each command so it shows up in `uf --help` and
+  `ct --help`."
+  ["Authentication credential sources (priority order):"
+   "  1. CLI args (--access-token, --refresh-token, --client-id, --client-secret)"
+   "  2. environment variables (GD_ACCESS_TOKEN, GD_REFRESH_TOKEN,"
+   "     GD_CLIENT_ID, GD_CLIENT_SECRET)"
+   "  3. EDN file at $XDG_DATA_HOME/google-drive-uploader/auth.edn"
+   "     (read ONLY when none of the four OAuth2 values is set"
+   "     via CLI or env; falls back to ~/.local/share when"
+   "     XDG_DATA_HOME is not defined)"
+   ""
+   "Expected auth.edn format:"
+   "  {:client-id     \"...\""
+   "   :client-secret \"...\""
+   "   :refresh-token \"...\""
+   "   :access-token  \"...\"}"
+   ""
+   "When auth.edn exists, refreshed access tokens are persisted back"
+   "to it automatically (other keys are preserved)."
+   ""
+   "The service-account mode (--key-file / GD_KEY_FILE) is independent"
+   "of auth.edn and is never read from or written to it."])
+
 (def CONFIGURATION
   {:app      {:command     "google-drive-uploader"
-              :description "Upload files to Google Drive from the command line."
+              :description (str "Upload files to Google Drive from the command line. "
+                                "Credentials can be provided via CLI args, "
+                                "GD_* env vars, or "
+                                "$XDG_DATA_HOME/google-drive-uploader/auth.edn "
+                                "(see `uf --help` for details).")
               :version     "0.1"}
    :global-opts     [verbose-opt]
    :commands [{:command     "upload-file" :short "uf"
-               :description ["Upload a file."
-                             ""
-                             "Tip: pass --verbose (or -v) BEFORE the subcommand"
-                             "to enable debug logging, e.g.:"
-                             "  google-drive-uploader --verbose uf --folder-id ..."]
+               :description (into ["Upload a file."
+                                   ""
+                                   "Tip: pass --verbose (or -v) BEFORE the subcommand"
+                                   "to enable debug logging, e.g.:"
+                                   "  google-drive-uploader --verbose uf --folder-id ..."
+                                   ""]
+                                  auth-sources-help)
                :opts        [{:option "folder" :short "f" :type :string :default ""}
                              {:option "folder-id" :short "fi" :type :string :default ""}
                              {:option "file-path" :short "fp" :type :string :default :present}
@@ -100,11 +137,13 @@
                              {:option "client-secret" :short "cs" :type :string :env "GD_CLIENT_SECRET"}]
                :runs        upload}
               {:command     "check-token" :short "ct"
-               :description ["Check access token and refresh if needed."
-                             ""
-                             "Tip: pass --verbose (or -v) BEFORE the subcommand"
-                             "to enable debug logging, e.g.:"
-                             "  google-drive-uploader --verbose ct --key-file ..."]
+               :description (into ["Check access token and refresh if needed."
+                                   ""
+                                   "Tip: pass --verbose (or -v) BEFORE the subcommand"
+                                   "to enable debug logging, e.g.:"
+                                   "  google-drive-uploader --verbose ct --key-file ..."
+                                   ""]
+                                  auth-sources-help)
                :opts        [{:option "access-token" :short "at" :type :string :env "GD_ACCESS_TOKEN"}
                              {:option "key-file" :short "k" :type :string :env "GD_KEY_FILE"}
                              {:option "refresh-token" :short "rt" :type :string :env "GD_REFRESH_TOKEN"}

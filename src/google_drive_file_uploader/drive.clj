@@ -1,5 +1,6 @@
 (ns google-drive-file-uploader.drive
   (:require [failjure.core :as f]
+            [google-drive-file-uploader.auth :as auth]
             [google-drive-file-uploader.config :as config]
             [clj-http.client :as http]
             [clojure.java.io :as io]
@@ -113,9 +114,11 @@
                         :access-token)
                 (throw (ex-info (str "Error retrieving authorization-token" {:status status
                                                                              :body   body}) {})))]
-    (timbre/debug "authorization-token: writing token to stdout (legacy behaviour)")
-    (println "Please update $XDG_CONFIG_HOME/chezmoi/chezmoi.toml > google_drive_uploader.access.token with this AT\n" token)
-    #_(spit (str (System/getProperty "user.home") "/.google-drive-access-token") token)
+    (timbre/debug "authorization-token: token obtained, length ="
+                  (when token (count token)))
+    (if (auth/update-access-token! token)
+      (timbre/info "Access token persisted to auth.edn.")
+      (println "Please update $XDG_CONFIG_HOME/chezmoi/chezmoi.toml > google_drive_uploader.access.token with this AT\n" token))
     token))
 
 (defn valid-access-token? [access-token]
