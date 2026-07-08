@@ -244,8 +244,8 @@
                      (if (str/blank? upload-folder-id)
                        (do (timbre/debug "upload-file-to-folder: folder not found, returning failure")
                            (f/fail (format "Folder %s does not exist" (or folder-id folder))))
-                       (do (timbre/debug "upload-file-to-folder: calling upload-file-multipart")
-                           (upload-file-multipart upload-folder-id file-path file-name access-token)))))]
+                       (when-not (upload-file-multipart upload-folder-id file-path file-name access-token)
+                         (f/fail "Cannot upload file")))))]
     (timbre/debug "upload-file-to-folder: final result =" result)
     result))
 
