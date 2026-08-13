@@ -31,6 +31,7 @@
   (or (System/getenv "XDG_DATA_HOME")
       (str (System/getProperty "user.home") "/.local/share")))
 
+;; client-id et client-secret dispo dans chezmoi.toml mais ce fichier n'est pas suivi.
 (defn auth-file-path
   "Compute the path to the auth EDN file.
   Resolved on each call so callers can rebind `XDG_DATA_HOME`
